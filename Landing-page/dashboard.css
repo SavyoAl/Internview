@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Reusable buttons */
+.btn-primary {
+  padding: 0.5rem 1rem;
+  background: url("assets/internview-bg.png") no-repeat center center fixed;
+  background-size: cover;
+  color: white;
+  border-radius: 0.375rem; /* rounded-md */
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+.btn-primary:hover {
+  background-color: #4338ca; /* indigo-700 */
+}
+
+/* Card style */
+.card {
+  background-color: white;
+  padding: 1.25rem;
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Icon wrapper */
+.icon-circle {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: #e0e7ff; /* indigo-100 */
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+/* Sidebar nav link base */
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151; /* gray-700 */
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+}
+.nav-link:hover {
+  background-color: #eef2ff; /* indigo-50 */
+  color: #8d1883; /* indigo-600 */
+}
+.nav-link.active {
+  background-color: #eef2ff;
+  color: #000000;
+}

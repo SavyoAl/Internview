@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Setup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen">
+  <div class="setup-container bg-white p-8 rounded shadow-md w-full max-w-md">
+    <h2 class="text-xl font-semibold mb-4">📝 Let’s tailor your interview</h2>
+    <form id="setup-form" class="space-y-4">
+      <div>
+        <label for="role" class="block text-sm font-medium">Role</label>
+        <input type="text" id="role" name="role" placeholder="e.g. Software Intern" required
+               class="mt-1 p-2 border border-gray-300 rounded w-full" />
+      </div>
+      <div>
+        <label for="company" class="block text-sm font-medium">Company (optional)</label>
+        <input type="text" id="company" name="company" placeholder="e.g. Google"
+               class="mt-1 p-2 border border-gray-300 rounded w-full" />
+      </div>
+      <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">
+        Begin Interview
+      </button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById("setup-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const role = document.getElementById("role").value;
+      const company = document.getElementById("company").value;
+
+      localStorage.setItem("interviewRole", role);
+      localStorage.setItem("interviewCompany", company);
+
+      window.location.href = "interview-session.html";
+    });
+  </script>
+</body>
+</html>

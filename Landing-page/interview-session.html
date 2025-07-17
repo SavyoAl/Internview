@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interview Session</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded shadow-md max-w-2xl w-full">
+    <h2 class="text-xl font-semibold mb-4">🎙️ Interview in Progress</h2>
+
+    <div id="interview-question" class="text-lg text-gray-800 mb-6">Loading question...</div>
+
+    <!-- User Response Input -->
+    <textarea id="user-answer" placeholder="Type your response here..." rows="5"
+              class="w-full p-3 border border-gray-300 rounded mb-2"></textarea>
+
+    <div class="flex items-center gap-2 mb-4">
+      <button id="record-button" class="bg-gray-200 px-3 py-1 rounded">🎤 Speak</button>
+      <button id="submit-answer" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+        Submit Answer
+      </button>
+    </div>
+
+    <!-- Evaluation Output -->
+    <div id="evaluation-result" class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded border border-gray-200 hidden"></div>
+
+    <button id="next-question" class="mt-4 hidden bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+      Next Question →
+    </button>
+  </div>
+
+  <script>
+    const role = localStorage.getItem("interviewRole") || "Intern";
+    const company = localStorage.getItem("interviewCompany") || "";
+
+    async function generateInterviewQuestion() {
+      document.getElementById("evaluation-result").classList.add("hidden");
+      document.getElementById("next-question").classList.add("hidden");
+      document.getElementById("user-answer").value = "";
+
+      const res = await fetch("http://localhost:5000/api/question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, company })
+      });
+
+      const data = await res.json();
+      document.getElementById("interview-question").innerText = data.question;
+    }
+
+    async function evaluateUserAnswer() {
+      const userAnswer = document.getElementById("user-answer").value;
+      if (!userAnswer.trim()) return alert("Please provide an answer first.");
+
+      const res = await fetch("http://localhost:5000/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: userAnswer })
+      });
+
+      const data = await res.json();
+      document.getElementById("evaluation-result").innerText = data.feedback;
+      document.getElementById("evaluation-result").classList.remove("hidden");
+      document.getElementById("next-question").classList.remove("hidden");
+    }
+
+    // Voice input (Web Speech API)
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+
+    document.getElementById("record-button").addEventListener("click", () => {
+      recognition.start();
+    });
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById("user-answer").value = transcript;
+    };
+
+    document.getElementById("submit-answer").addEventListener("click", evaluateUserAnswer);
+    document.getElementById("next-question").addEventListener("click", generateInterviewQuestion);
+
+    window.onload = generateInterviewQuestion;
+  </script>
+</body>
+</html>
