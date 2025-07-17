@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sign In - Internview</title>
+
+  <!-- Load styles -->
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Font Awesome for eye/eye-slash icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="auth-page">
+  <!-- Styled login box -->
+<div class="auth-card">
+  <h2>Log in</h2>
+  <p class="auth-subtext">New here? <a href="signup.html">Create an account</a></p>
+  <form onsubmit="return handleLogin(event)">
+    
+    <!-- Email Input -->
+    <input type="email" id="loginEmail" placeholder="Email" required />
+    
+    <!-- Password Input + Toggle -->
+    <div class="password-wrapper">
+      <input type="password" id="loginPassword" placeholder="Password" required />
+      <i class="fa-solid fa-eye toggle-password" onclick="togglePassword(this)"></i>
+    </div>
+
+
+    <!-- Forgot password link -->
+    <div class="auth-forgot">
+      <a href="#" onclick="sendReset()">Forgot password?</a>
+    </div>
+
+    <button type="submit">Log in</button>
+  </form>
+</div>
+
+
+  <!-- Firebase Auth -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDC21ghXgZFaji4rp0a7MdTdOVgqouNidg",
+      authDomain: "internview-c5dbb.firebaseapp.com",
+      projectId: "internview-c5dbb",
+      storageBucket: "internview-c5dbb.appspot.com",
+      messagingSenderId: "1033532912453",
+      appId: "1:1033532912453:web:0a78dcca0d19947628442c",
+      measurementId: "G-7YBED9Z60E"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById("loginEmail").value;
+      const password = document.getElementById("loginPassword").value;
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          window.location.href = "home.html";  // 👈 this is the redirect after login
+        })
+        .catch((error) => alert(error.message));
+    }
+    function togglePassword(icon) {
+      const input = document.getElementById("loginPassword");
+      const isPassword = input.type === "password";
+
+      input.type = isPassword ? "text" : "password";
+      icon.classList.toggle("fa-eye");
+      icon.classList.toggle("fa-eye-slash");
+      }
+
+
+    function sendReset() {
+      const email = document.getElementById("loginEmail").value;
+      if (!email) return alert("Please enter your email first.");
+      auth.sendPasswordResetEmail(email)
+        .then(() => alert("Password reset email sent!"))
+        .catch((error) => alert(error.message));
+    }
+
+    
+  </script>
+</body>
+</html>

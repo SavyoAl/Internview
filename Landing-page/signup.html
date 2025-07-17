@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Create Account - Internview</title>
+
+  <!-- Fonts & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Mobile Responsive -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="auth-page">
+  <!-- Sign Up Card -->
+  <div class="auth-card">
+    <h2>Create Account</h2>
+    <p class="auth-subtext">Already have an account? <a href="signin.html">Log in</a></p>
+    <form onsubmit="return handleSignup(event)">
+      <input type="email" id="signupEmail" placeholder="Email" required />
+
+      <div class="password-wrapper">
+        <input type="password" id="signupPassword" placeholder="Password (min. 8 characters)" required oninput="validatePassword()" />
+        <i class="fa-solid fa-eye toggle-password" onclick="toggleSignupPassword(this)"></i>
+      </div>
+
+      <p id="passwordWarning" class="warning-text" style="display: none;">Password must be at least 8 characters</p>
+
+      <button type="submit" id="signupBtn" disabled>Sign Up</button>
+    </form>
+
+  </div>
+
+  <!-- Firebase Auth -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+  <script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDC21ghXgZFaji4rp0a7MdTdOVgqouNidg",
+    authDomain: "internview-c5dbb.firebaseapp.com",
+    projectId: "internview-c5dbb",
+    storageBucket: "internview-c5dbb.firebasestorage.app",
+    messagingSenderId: "1033532912453",
+    appId: "1:1033532912453:web:0a78dcca0d19947628442c",
+    measurementId: "G-7YBED9Z60E"
+  };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    function handleSignup(e) {
+      e.preventDefault();
+      const email = document.getElementById("signupEmail").value;
+      const password = document.getElementById("signupPassword").value;
+
+      console.log("🚀 Attempting signup with:", email);
+
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => {
+          console.log("✅ Account created successfully");
+          alert("Account created!");
+          window.location.href = "home.html";
+        })
+        .catch(error => {
+          console.error("❌ Signup error:", error.message);
+          alert(error.message);
+        });
+    }
+
+
+    function toggleSignupPassword(icon) {
+      const input = document.getElementById("signupPassword");
+      const isPassword = input.type === "password";
+
+      input.type = isPassword ? "text" : "password";
+      icon.classList.toggle("fa-eye");
+      icon.classList.toggle("fa-eye-slash");
+    }
+    function validatePassword() {
+      const password = document.getElementById("signupPassword").value;
+      const warning = document.getElementById("passwordWarning");
+      const button = document.getElementById("signupBtn");
+
+      if (password.length < 8) {
+        warning.style.display = "block";
+        button.disabled = true;
+      } else {
+        warning.style.display = "none";
+        button.disabled = false;
+      }
+    }
+
+  </script>
+</body>
+</html>

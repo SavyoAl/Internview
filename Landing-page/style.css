@@ -1,0 +1,312 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+.landing-page {
+  font-family: 'Geist', sans-serif;
+  background: url("assets/internview-bg.png") no-repeat center center fixed;
+  background-size: cover;
+  color: #000;
+  height: 100vh;
+  padding: 20px;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(240, 240, 240, 0.78); /* 0.9 = 90% opacity */  padding: 20px 5%;
+  border-bottom: 2px solid white;
+  position: absolute;
+  top: 0;
+  width: 100vw; /* ✅ fixes right-side gap */
+  left: 0;
+  
+}
+
+.nav-left .logo {
+  font-weight: 600;
+  font-size: 20px;
+}
+
+.nav-center {
+  display: flex;
+  gap: 32px;
+}
+
+.nav-center a,
+.nav-right a {
+  text-decoration: none;
+  color: #333;
+  font-weight: 500;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+
+.hero {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 64px;
+  max-width: 700px;
+}
+
+.hero h1 {
+  font-size: 54px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.highlight {
+  background-color: #ff4668;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: inline-block;
+}
+
+.subtext {
+  margin-top: 16px;
+  font-size: 16px;
+  color: #555;
+  max-width: 420px;
+}
+
+.buttons {
+  margin-top: 32px;
+}
+
+.btn-primary {
+  background-color: #ff4668;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.btn-primary:hover {
+  background-color: #e03c5a;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #444;
+  border: none;
+  margin-left: 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* Sign in & Up pages */
+/* Reset and font */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background: url("assets/sign-up.png") no-repeat center center fixed;
+  background-size: cover;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Card */
+.auth-card {
+  background-color: white;
+  padding: 40px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Headings */
+.auth-card h2 {
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.auth-subtext {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 24px;
+  color: #555;
+}
+
+.auth-subtext a {
+  color: #000;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* Form */
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Input styling */
+.auth-card input {
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Forgot password link */
+.auth-forgot {
+  font-size: 12px;
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+.auth-forgot a {
+  text-decoration: none;
+  color: #000;
+  font-weight: 500;
+}
+
+/* Toggle password */
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 40%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 16px;
+  color: #777;
+}
+
+
+/* Button */
+.auth-card button {
+  background-color: #aaa;
+  color: white;
+  padding: 12px;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.auth-card button:hover {
+  background-color: #888;
+}
+
+.warning-text {
+  font-size: 12px;
+  color: red;
+  margin-top: -12px;
+  margin-bottom: 12px;
+}
+
+
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 24px;
+    border-radius: 12px;
+  }
+
+  .auth-card input,
+  .auth-card button {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .toggle-password {
+    font-size: 12px;
+    right: 10px;
+  }
+}
+
+
+
+/* Mobile */
+@media (max-width: 768px) {
+  body {
+    padding: 20px;
+  }
+
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(4px);
+  }
+
+  .navbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .hero {
+    padding: 60px 20px 20px;
+    align-items: center;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 34px;
+  }
+
+  .highlight {
+    font-size: 24px;
+    padding: 6px 16px;
+  }
+
+  .subtext {
+    font-size: 14px;
+    margin-top: 12px;
+    max-width: 100%;
+  }
+
+  .buttons {
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    max-width: 280px;
+    margin-bottom: 12px;
+  }
+}
