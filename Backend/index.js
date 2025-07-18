@@ -4,10 +4,14 @@ const express = require("express");
 const axios = require("axios");
 require("dotenv").config();
 const cors = require("cors");
+const multer = require("multer");
+const FormData = require("form-data");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const HEADERS = {
@@ -28,7 +32,7 @@ Ask one open-ended behavioral interview question relevant to this role. Avoid ye
 
   try {
     const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
+      OPENAI_API_URL,
       {
         model: "gpt-4",
         messages: [
@@ -37,18 +41,11 @@ Ask one open-ended behavioral interview question relevant to this role. Avoid ye
         ],
         temperature: 0.7
       },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-        }
-      }
+      { headers: HEADERS }
     );
 
     const question = response.data.choices?.[0]?.message?.content?.trim();
-    if (!question) {
-      throw new Error("No question returned by GPT");
-    }
+    if (!question) throw new Error("No question returned by GPT");
 
     console.log("✅ Generated question:", question);
     res.json({ question });
@@ -61,10 +58,12 @@ Ask one open-ended behavioral interview question relevant to this role. Avoid ye
 
 // 🔹 Route: Evaluate User Answer using STAR method
 app.post("/api/evaluate", async (req, res) => {
-  const { answer } = req.body;
+  const { answer, company } = req.body;
 
   const evalPrompt = `
-You are an AI trained to evaluate behavioral interview responses using the STAR method.
+You are an AI trained to evaluate behavioral interview responses using the STAR method. 
+
+You are evaluating this response **as if you were part of the hiring team at ${company || "a professional company"}**.
 
 Evaluate the following answer:
 "${answer}"
@@ -80,9 +79,9 @@ Evaluate the following answer:
    - Relevance
    - Confidence
 
-3. Provide short, actionable feedback to improve the response.
+3. Provide short, actionable feedback from the perspective of someone hiring for ${company || "a professional company"}. Emphasize how the response aligns or doesn't align with the company's expectations, communication style, or values if relevant.
 
-Return the result in this format:
+Format your response like this:
 ---
 STAR Breakdown:
 - Situation: [Yes/No]
@@ -96,7 +95,7 @@ Scores:
 - Confidence: [1-5]
 
 Feedback:
-[Short actionable feedback]
+[Personalized feedback as someone from ${company}]
 ---
 `;
 
@@ -109,7 +108,7 @@ Feedback:
           { role: "system", content: "You are a helpful AI interview evaluator." },
           { role: "user", content: evalPrompt }
         ],
-        temperature: 0.5,
+        temperature: 0.5
       },
       { headers: HEADERS }
     );
@@ -120,6 +119,33 @@ Feedback:
   } catch (err) {
     console.error("❌ Error evaluating answer:", err.message);
     res.status(500).send("Error evaluating answer");
+  }
+});
+
+// 🔹 Route: Transcribe Audio using Whisper
+app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", req.file.buffer, "voice.webm");
+    formData.append("model", "whisper-1");
+
+    const response = await axios.post(
+      "https://api.openai.com/v1/audio/transcriptions",
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...formData.getHeaders()
+        }
+      }
+    );
+
+    const transcript = response.data.text;
+    console.log("🎧 Whisper transcript:", transcript);
+    res.json({ transcript });
+  } catch (err) {
+    console.error("❌ Whisper API error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Transcription failed" });
   }
 });
 

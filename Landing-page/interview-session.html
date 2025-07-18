@@ -16,16 +16,22 @@
     <textarea id="user-answer" placeholder="Type your response here..." rows="5"
               class="w-full p-3 border border-gray-300 rounded mb-2"></textarea>
 
+    <!-- Buttons -->
     <div class="flex items-center gap-2 mb-4">
       <button id="record-button" class="bg-gray-200 px-3 py-1 rounded">🎤 Speak</button>
+      <button id="stop-button" class="bg-red-500 text-white px-3 py-1 rounded hidden">⏹️ Stop</button>
       <button id="submit-answer" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
         Submit Answer
       </button>
     </div>
 
+    <!-- Timer -->
+    <div id="timer" class="text-sm text-gray-500 mb-2 hidden">Recording: <span id="time">0</span>s</div>
+
     <!-- Evaluation Output -->
     <div id="evaluation-result" class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded border border-gray-200 hidden"></div>
 
+    <!-- Next Button -->
     <button id="next-question" class="mt-4 hidden bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
       Next Question →
     </button>
@@ -39,6 +45,7 @@
       document.getElementById("evaluation-result").classList.add("hidden");
       document.getElementById("next-question").classList.add("hidden");
       document.getElementById("user-answer").value = "";
+      document.getElementById("evaluation-result").innerText = "";
 
       const res = await fetch("http://localhost:5000/api/question", {
         method: "POST",
@@ -50,37 +57,104 @@
       document.getElementById("interview-question").innerText = data.question;
     }
 
-    async function evaluateUserAnswer() {
+    async function evaluateUserAnswer(mode = "typed") {
       const userAnswer = document.getElementById("user-answer").value;
       if (!userAnswer.trim()) return alert("Please provide an answer first.");
+
+      const resultBox = document.getElementById("evaluation-result");
+
+      resultBox.classList.remove("hidden");
+      resultBox.innerText = mode === "voice"
+        ? "Transcribing & evaluating... ⏳"
+        : "Evaluating response... ⏳";
 
       const res = await fetch("http://localhost:5000/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer: userAnswer })
+        body: JSON.stringify({ answer: userAnswer, company })
       });
 
       const data = await res.json();
-      document.getElementById("evaluation-result").innerText = data.feedback;
-      document.getElementById("evaluation-result").classList.remove("hidden");
+      resultBox.innerText = data.feedback;
+      resultBox.classList.remove("hidden");
       document.getElementById("next-question").classList.remove("hidden");
     }
 
-    // Voice input (Web Speech API)
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
+    // 🎤 Whisper voice recording
+    let mediaRecorder;
+    let audioChunks = [];
+    let timerInterval;
+    let seconds = 0;
 
-    document.getElementById("record-button").addEventListener("click", () => {
-      recognition.start();
+    function startTimer() {
+      seconds = 0;
+      document.getElementById("time").innerText = seconds;
+      document.getElementById("timer").classList.remove("hidden");
+      timerInterval = setInterval(() => {
+        seconds++;
+        document.getElementById("time").innerText = seconds;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+      document.getElementById("timer").classList.add("hidden");
+      document.getElementById("time").innerText = "0";
+    }
+
+    document.getElementById("record-button").addEventListener("click", async () => {
+      audioChunks = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stopTimer();
+
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        const formData = new FormData();
+        formData.append("audio", blob);
+
+        const resultBox = document.getElementById("evaluation-result");
+        resultBox.classList.remove("hidden");
+        resultBox.innerText = "Transcribing & evaluating... ⏳";
+
+        try {
+          const res = await fetch("http://localhost:5000/api/transcribe", {
+            method: "POST",
+            body: formData
+          });
+
+          const data = await res.json();
+          document.getElementById("user-answer").value = data.transcript;
+
+          evaluateUserAnswer("voice");
+        } catch (err) {
+          alert("Error transcribing voice. Please try again.");
+          console.error(err);
+        }
+
+        document.getElementById("record-button").classList.remove("hidden");
+        document.getElementById("stop-button").classList.add("hidden");
+      };
+
+      mediaRecorder.start();
+      startTimer();
+
+      document.getElementById("record-button").classList.add("hidden");
+      document.getElementById("stop-button").classList.remove("hidden");
     });
 
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      document.getElementById("user-answer").value = transcript;
-    };
+    document.getElementById("stop-button").addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    });
 
-    document.getElementById("submit-answer").addEventListener("click", evaluateUserAnswer);
+    document.getElementById("submit-answer").addEventListener("click", () => evaluateUserAnswer("typed"));
     document.getElementById("next-question").addEventListener("click", generateInterviewQuestion);
 
     window.onload = generateInterviewQuestion;
