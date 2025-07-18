@@ -6,6 +6,7 @@ require("dotenv").config();
 const cors = require("cors");
 const multer = require("multer");
 const FormData = require("form-data");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 app.use(cors());
@@ -13,6 +14,13 @@ app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+// OpenAI
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const HEADERS = {
   "Content-Type": "application/json",
@@ -27,10 +35,26 @@ app.post("/api/question", async (req, res) => {
     return res.status(400).json({ error: "Role is required" });
   }
 
-  const prompt = `You are a professional interviewer for the role of ${role}${company ? " at " + company : ""}. 
+  try {
+    // 1️⃣ Try fetching from Supabase
+    const { data, error } = await supabase
+      .from("interview_questions")
+      .select("question")
+      .eq("role", role.toLowerCase())
+      .order("id", { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      console.log("✅ Fetched from Supabase:", data[0].question);
+      return res.json({ question: data[0].question });
+    }
+
+    // 2️⃣ Fallback to GPT-4
+    const prompt = `You are a professional interviewer for the role of ${role}${company ? " at " + company : ""}. 
 Ask one open-ended behavioral interview question relevant to this role. Avoid yes/no questions. Ask only one question.`;
 
-  try {
     const response = await axios.post(
       OPENAI_API_URL,
       {
@@ -47,11 +71,11 @@ Ask one open-ended behavioral interview question relevant to this role. Avoid ye
     const question = response.data.choices?.[0]?.message?.content?.trim();
     if (!question) throw new Error("No question returned by GPT");
 
-    console.log("✅ Generated question:", question);
+    console.log("🧠 Fallback GPT-4 question:", question);
     res.json({ question });
 
   } catch (err) {
-    console.error("❌ GPT Request Failed:", err.response?.data || err.message);
+    console.error("❌ Error in /api/question:", err.response?.data || err.message);
     res.status(500).json({ error: "Error generating question" });
   }
 });
