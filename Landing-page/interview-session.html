@@ -5,47 +5,88 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Interview Session</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-  <div class="bg-white p-8 rounded shadow-md max-w-2xl w-full">
-    <h2 class="text-xl font-semibold mb-4">🎙️ Interview in Progress</h2>
+<body class="bg-white flex min-h-screen font-sans">
 
-    <div id="interview-question" class="text-lg text-gray-800 mb-6">Loading question...</div>
+  <!-- Sidebar -->
+  <aside class="w-64 border-r border-pink-200 p-4">
+    <button onclick="window.location.href='index.html'" class="bg-pink-500 text-white px-3 py-2 text-sm rounded-md w-full mb-4 hover:bg-pink-600">
+      ⬅ Back to home
+    </button>
+    <h2 class="text-xs text-gray-500 uppercase mb-2">Chats</h2>
+    <div id="chat-history" class="space-y-2 text-sm text-gray-700">
+      <p class="text-gray-400">No chats yet</p>
+    </div>
+  </aside>
 
-    <!-- User Response Input -->
-    <textarea id="user-answer" placeholder="Type your response here..." rows="5"
-              class="w-full p-3 border border-gray-300 rounded mb-2"></textarea>
-
-    <!-- Buttons -->
-    <div class="flex items-center gap-2 mb-4">
-      <button id="record-button" class="bg-gray-200 px-3 py-1 rounded">🎤 Speak</button>
-      <button id="stop-button" class="bg-red-500 text-white px-3 py-1 rounded hidden">⏹️ Stop</button>
-      <button id="submit-answer" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
-        Submit Answer
-      </button>
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col items-center px-8 py-10 overflow-y-auto">
+    <div class="text-center mb-6">
+      <h1 class="text-2xl font-semibold text-black">
+        Anxious About the <span class="inline-block bg-pink-500 text-white px-3 py-1 rounded-full shadow-sm text-base align-middle">Interview?</span>
+      </h1>
+      <p class="text-gray-500 text-sm mt-2 font-medium">I'm here to help you practice</p>
     </div>
 
-    <!-- Timer -->
-    <div id="timer" class="text-sm text-gray-500 mb-2 hidden">Recording: <span id="time">0</span>s</div>
+    <!-- Chat Bubble Messages -->
+    <div id="chat-messages" class="w-full max-w-2xl space-y-4 mb-6 flex flex-col"></div>
 
-    <!-- Evaluation Output -->
-    <div id="evaluation-result" class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded border border-gray-200 hidden"></div>
+    <!-- Input Box -->
+    <div class="flex flex-col items-center w-full max-w-2xl">
+      <textarea id="user-answer" placeholder="Type your message..." rows="3"
+        class="w-full border border-pink-300 rounded-lg p-3 text-sm resize-none mb-3 focus:outline-none focus:ring-2 focus:ring-pink-300"></textarea>
 
-    <!-- Next Button -->
-    <button id="next-question" class="mt-4 hidden bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-      Next Question →
-    </button>
-  </div>
+      <div class="flex gap-2 self-end">
+        <button id="record-button" class="bg-gray-200 text-gray-700 px-3 py-1 text-sm rounded hover:bg-gray-300">🎤 Speak</button>
+        <button id="stop-button" class="bg-red-500 text-white px-3 py-1 text-sm rounded hidden">⏹️ Stop</button>
+        <button id="submit-answer" class="bg-pink-500 text-white px-4 py-1 text-sm rounded hover:bg-pink-600">➤</button>
+      </div>
+    </div>
 
+    <div id="timer" class="text-xs text-gray-400 mt-2 hidden">Recording: <span id="time">0</span>s</div>
+    <button id="next-question" class="mt-6 hidden bg-green-600 text-white px-4 py-2 text-sm rounded hover:bg-green-700">Next Question →</button>
+  </main>
+
+  <!-- Embedded JavaScript -->
   <script>
     const role = localStorage.getItem("interviewRole") || "Intern";
     const company = localStorage.getItem("interviewCompany") || "";
 
+    function appendMessage(text, type = "bot") {
+      const chat = document.createElement("div");
+      chat.className = `max-w-[75%] px-4 py-2 rounded-lg shadow text-sm whitespace-pre-wrap ${
+        type === "user"
+          ? "self-end bg-pink-100 text-right text-black ml-auto"
+          : type === "info"
+          ? "bg-pink-500 text-white font-medium text-left"
+          : "bg-gray-100 text-gray-800 text-left"
+      }`;
+      chat.innerText = text;
+
+      const container = document.getElementById("chat-messages");
+      container.appendChild(chat);
+      container.scrollTop = container.scrollHeight;
+    }
+
     async function generateInterviewQuestion() {
-      document.getElementById("evaluation-result").classList.add("hidden");
       document.getElementById("next-question").classList.add("hidden");
       document.getElementById("user-answer").value = "";
-      document.getElementById("evaluation-result").innerText = "";
+
+      appendMessage(`Hi there 👋 Before we begin, can you confirm the role and company you're applying for?`, "bot");
+      appendMessage(`Role: ${role || "N/A"}\nCompany: ${company || "N/A"}`, "info");
+      appendMessage("Loading your first question... 🎯", "bot");
 
       const res = await fetch("http://localhost:5000/api/question", {
         method: "POST",
@@ -54,19 +95,14 @@
       });
 
       const data = await res.json();
-      document.getElementById("interview-question").innerText = data.question;
+      appendMessage(data.question, "bot");
     }
 
     async function evaluateUserAnswer(mode = "typed") {
       const userAnswer = document.getElementById("user-answer").value;
       if (!userAnswer.trim()) return alert("Please provide an answer first.");
 
-      const resultBox = document.getElementById("evaluation-result");
-
-      resultBox.classList.remove("hidden");
-      resultBox.innerText = mode === "voice"
-        ? "Transcribing & evaluating... ⏳"
-        : "Evaluating response... ⏳";
+      appendMessage(userAnswer, "user");
 
       const res = await fetch("http://localhost:5000/api/evaluate", {
         method: "POST",
@@ -75,12 +111,18 @@
       });
 
       const data = await res.json();
-      resultBox.innerText = data.feedback;
-      resultBox.classList.remove("hidden");
+      appendMessage(data.feedback, "bot");
       document.getElementById("next-question").classList.remove("hidden");
+
+      let allChats = JSON.parse(localStorage.getItem("chatSessions")) || [];
+      const timestamp = new Date().toLocaleString();
+      if (!allChats.some(c => c.role === role)) {
+        allChats.push({ role, timestamp });
+        localStorage.setItem("chatSessions", JSON.stringify(allChats));
+        renderChatHistory();
+      }
     }
 
-    // 🎤 Whisper voice recording
     let mediaRecorder;
     let audioChunks = [];
     let timerInterval;
@@ -113,14 +155,9 @@
 
       mediaRecorder.onstop = async () => {
         stopTimer();
-
         const blob = new Blob(audioChunks, { type: "audio/webm" });
         const formData = new FormData();
         formData.append("audio", blob);
-
-        const resultBox = document.getElementById("evaluation-result");
-        resultBox.classList.remove("hidden");
-        resultBox.innerText = "Transcribing & evaluating... ⏳";
 
         try {
           const res = await fetch("http://localhost:5000/api/transcribe", {
@@ -130,20 +167,18 @@
 
           const data = await res.json();
           document.getElementById("user-answer").value = data.transcript;
-
           evaluateUserAnswer("voice");
         } catch (err) {
           alert("Error transcribing voice. Please try again.");
           console.error(err);
         }
-        
+
         document.getElementById("record-button").classList.remove("hidden");
         document.getElementById("stop-button").classList.add("hidden");
       };
 
       mediaRecorder.start();
       startTimer();
-
       document.getElementById("record-button").classList.add("hidden");
       document.getElementById("stop-button").classList.remove("hidden");
     });
@@ -157,7 +192,24 @@
     document.getElementById("submit-answer").addEventListener("click", () => evaluateUserAnswer("typed"));
     document.getElementById("next-question").addEventListener("click", generateInterviewQuestion);
 
-    window.onload = generateInterviewQuestion;
+    function renderChatHistory() {
+      const historyBox = document.getElementById("chat-history");
+      const allChats = JSON.parse(localStorage.getItem("chatSessions")) || [];
+      if (!allChats.length) {
+        historyBox.innerHTML = "<p class='text-gray-400'>No chats yet</p>";
+        return;
+      }
+      historyBox.innerHTML = allChats.map(chat =>
+        `<div class="p-2 border rounded hover:bg-gray-100 cursor-pointer">
+          ${chat.role}<br><span class="text-xs text-gray-400">${chat.timestamp}</span>
+        </div>`
+      ).join("");
+    }
+
+    window.onload = () => {
+      generateInterviewQuestion();
+      renderChatHistory();
+    };
   </script>
 </body>
 </html>
