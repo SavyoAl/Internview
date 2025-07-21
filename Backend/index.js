@@ -11,32 +11,31 @@ const { createClient } = require("@supabase/supabase-js");
 const app = express();
 app.use(cors());
 app.use(express.json());
-
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-// OpenAI
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("❌ Missing Supabase URL or Anon Key in .env");
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// OpenAI Setup
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const HEADERS = {
   "Content-Type": "application/json",
   Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
 };
 
-// 🔹 Route: Generate Interview Question
+// Route: Generate Interview Question
 app.post("/api/question", async (req, res) => {
   const { role, company } = req.body;
-
-  if (!role) {
-    return res.status(400).json({ error: "Role is required" });
-  }
+  if (!role) return res.status(400).json({ error: "Role is required" });
 
   try {
-    // 1️⃣ Try fetching from Supabase
     const { data, error } = await supabase
       .from("interview_questions")
       .select("question")
@@ -46,14 +45,12 @@ app.post("/api/question", async (req, res) => {
 
     if (error) throw error;
 
-    if (data && data.length > 0) {
+    if (data.length > 0) {
       console.log("✅ Fetched from Supabase:", data[0].question);
       return res.json({ question: data[0].question });
     }
 
-    // 2️⃣ Fallback to GPT-4
-    const prompt = `You are a professional interviewer for the role of ${role}${company ? " at " + company : ""}. 
-Ask one open-ended behavioral interview question relevant to this role. Avoid yes/no questions. Ask only one question.`;
+    const prompt = `You are a professional interviewer for the role of ${role}${company ? " at " + company : ""}. Ask one open-ended behavioral interview question. Avoid yes/no questions.`;
 
     const response = await axios.post(
       OPENAI_API_URL,
@@ -71,41 +68,40 @@ Ask one open-ended behavioral interview question relevant to this role. Avoid ye
     const question = response.data.choices?.[0]?.message?.content?.trim();
     if (!question) throw new Error("No question returned by GPT");
 
-    console.log("🧠 Fallback GPT-4 question:", question);
+    console.log("🧠 GPT-4 fallback question:", question);
     res.json({ question });
 
   } catch (err) {
-    console.error("❌ Error in /api/question:", err.response?.data || err.message);
+    console.error("❌ /api/question:", err.message);
     res.status(500).json({ error: "Error generating question" });
   }
 });
 
-// 🔹 Route: Evaluate User Answer using STAR method
+// Route: Evaluate Answer
 app.post("/api/evaluate", async (req, res) => {
-  const { answer, company } = req.body;
+  const { answer, role, company } = req.body;
 
   const evalPrompt = `
-You are an AI trained to evaluate behavioral interview responses using the STAR method. 
+You are an AI trained to evaluate behavioral interview responses using the STAR method.
 
-You are evaluating this response **as if you were part of the hiring team at ${company || "a professional company"}**.
+Evaluate the following answer from a candidate applying for ${role || "a professional role"} at ${company || "a company"}:
 
-Evaluate the following answer:
 "${answer}"
 
-1. Does the answer include:
-   - Situation
-   - Task
-   - Action
-   - Result?
+1. STAR breakdown:
+- Situation
+- Task
+- Action
+- Result
 
-2. Rate the following from 1 to 5:
-   - Clarity
-   - Relevance
-   - Confidence
+2. Rate (1-5):
+- Clarity
+- Relevance
+- Confidence
 
-3. Provide short, actionable feedback from the perspective of someone hiring for ${company || "a professional company"}. Emphasize how the response aligns or doesn't align with the company's expectations, communication style, or values if relevant.
+3. Short actionable feedback
 
-Format your response like this:
+Format:
 ---
 STAR Breakdown:
 - Situation: [Yes/No]
@@ -119,7 +115,7 @@ Scores:
 - Confidence: [1-5]
 
 Feedback:
-[Personalized feedback as someone from ${company}]
+[Feedback here]
 ---
 `;
 
@@ -137,16 +133,17 @@ Feedback:
       { headers: HEADERS }
     );
 
-    const feedback = response.data.choices[0].message.content.trim();
-    console.log("✅ Evaluation complete");
+    const feedback = response.data.choices?.[0]?.message?.content?.trim();
+    console.log("✅ Evaluation generated");
     res.json({ feedback });
+
   } catch (err) {
-    console.error("❌ Error evaluating answer:", err.message);
-    res.status(500).send("Error evaluating answer");
+    console.error("❌ /api/evaluate:", err.message);
+    res.status(500).json({ error: "Evaluation failed" });
   }
 });
 
-// 🔹 Route: Transcribe Audio using Whisper
+// Route: Audio Transcription
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   try {
     const formData = new FormData();
@@ -165,14 +162,96 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     );
 
     const transcript = response.data.text;
-    console.log("🎧 Whisper transcript:", transcript);
+    console.log("🎧 Transcribed:", transcript);
     res.json({ transcript });
+
   } catch (err) {
-    console.error("❌ Whisper API error:", err.response?.data || err.message);
+    console.error("❌ /api/transcribe:", err.message);
     res.status(500).json({ error: "Transcription failed" });
   }
 });
 
-// 🔹 Start Server
+// Route: Extract Role and Company
+app.post("/api/extract-role-company", async (req, res) => {
+  const { intro } = req.body;
+  if (!intro) return res.status(400).json({ error: "Missing input" });
+
+  const prompt = `
+Extract the job role and company from this sentence:
+"${intro}"
+Respond in JSON:
+{ "role": "Your Role", "company": "Company Name" }
+`;
+
+  try {
+    const response = await axios.post(
+      OPENAI_API_URL,
+      {
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: "Extract JSON from user message." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0
+      },
+      { headers: HEADERS }
+    );
+
+    const raw = response.data.choices?.[0]?.message?.content;
+    const json = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+    console.log("🔍 Extracted role & company:", json);
+    res.json(json);
+
+  } catch (err) {
+    console.error("❌ /api/extract-role-company:", err.message);
+    res.status(500).json({ role: null, company: null });
+  }
+});
+
+// Route: Save Chat
+app.post("/api/save-chat", async (req, res) => {
+  const { session_id, role, company, message, sender } = req.body;
+
+  try {
+    const { error } = await supabase.from("chat_logs").insert([{
+      session_id,
+      role,
+      company,
+      message,
+      sender,
+      timestamp: new Date().toISOString()
+    }]);
+
+    if (error) throw error;
+    console.log("💾 Chat saved:", { session_id, message });
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ /api/save-chat:", err.message);
+    res.status(500).json({ error: "Failed to save chat" });
+  }
+});
+
+// Route: Load Chat
+app.post("/api/load-chat", async (req, res) => {
+  const { session_id } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from("chat_logs")
+      .select("*")
+      .eq("session_id", session_id)
+      .order("timestamp", { ascending: true });
+
+    if (error) throw error;
+    res.json({ data });
+
+  } catch (err) {
+    console.error("❌ /api/load-chat:", err.message);
+    res.status(500).json({ error: "Failed to load chat" });
+  }
+});
+
+// Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Backend running at http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));

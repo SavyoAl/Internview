@@ -5,7 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Interview Session</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    @keyframes blink {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+    .blinking-cursor::after {
+      content: '|';
+      animation: blink 1s step-end infinite;
+      margin-left: 2px;
+      color: #555;
+    }
+  </style>
   <script>
     tailwind.config = {
       theme: {
@@ -22,7 +34,7 @@
 
   <!-- Sidebar -->
   <aside class="w-64 border-r border-pink-200 p-4">
-    <button onclick="window.location.href='index.html'" class="bg-pink-500 text-white px-3 py-2 text-sm rounded-md w-full mb-4 hover:bg-pink-600">
+    <button onclick="window.location.href='home.html'" class="bg-pink-500 text-white px-3 py-2 text-sm rounded-md w-full mb-4 hover:bg-pink-600">
       ⬅ Back to home
     </button>
     <h2 class="text-xs text-gray-500 uppercase mb-2">Chats</h2>
@@ -31,7 +43,7 @@
     </div>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main -->
   <main class="flex-1 flex flex-col items-center px-8 py-10 overflow-y-auto">
     <div class="text-center mb-6">
       <h1 class="text-2xl font-semibold text-black">
@@ -40,10 +52,8 @@
       <p class="text-gray-500 text-sm mt-2 font-medium">I'm here to help you practice</p>
     </div>
 
-    <!-- Chat Bubble Messages -->
     <div id="chat-messages" class="w-full max-w-2xl space-y-4 mb-6 flex flex-col"></div>
 
-    <!-- Input Box -->
     <div class="flex flex-col items-center w-full max-w-2xl">
       <textarea id="user-answer" placeholder="Type your message..." rows="3"
         class="w-full border border-pink-300 rounded-lg p-3 text-sm resize-none mb-3 focus:outline-none focus:ring-2 focus:ring-pink-300"></textarea>
@@ -59,11 +69,29 @@
     <button id="next-question" class="mt-6 hidden bg-green-600 text-white px-4 py-2 text-sm rounded hover:bg-green-700">Next Question →</button>
   </main>
 
-  <!-- Embedded JavaScript -->
   <script>
-    const role = localStorage.getItem("interviewRole") || "Intern";
-    const company = localStorage.getItem("interviewCompany") || "";
+    let storedRole = "";
+    let storedCompany = "";
+    let introComplete = false;
 
+    // ✅ Generate session ID and store it in localStorage
+    const sessionId = localStorage.getItem("chatSessionId") || crypto.randomUUID();
+    localStorage.setItem("chatSessionId", sessionId);
+
+    // ✅ Save messages to Supabase
+    function saveChat(message, sender = "user") {
+      fetch("http://localhost:5000/api/save-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          role: storedRole,
+          company: storedCompany,
+          message,
+          sender
+        })
+      }).catch(err => console.error("Save failed", err));
+    }
     function appendMessage(text, type = "bot") {
       const chat = document.createElement("div");
       chat.className = `max-w-[75%] px-4 py-2 rounded-lg shadow text-sm whitespace-pre-wrap ${
@@ -74,53 +102,87 @@
           : "bg-gray-100 text-gray-800 text-left"
       }`;
       chat.innerText = text;
+      document.getElementById("chat-messages").appendChild(chat);
+      chat.scrollIntoView({ behavior: "smooth" });
+    }
 
-      const container = document.getElementById("chat-messages");
-      container.appendChild(chat);
-      container.scrollTop = container.scrollHeight;
+    function appendTypingMessage(fullText, speed = 20) {
+      return new Promise(resolve => {
+        const container = document.getElementById("chat-messages");
+        const bubble = document.createElement("div");
+        bubble.className = "max-w-[75%] px-4 py-2 rounded-lg shadow text-sm whitespace-pre-wrap bg-gray-100 text-gray-800 text-left blinking-cursor";
+        container.appendChild(bubble);
+
+        let index = 0;
+        const interval = setInterval(() => {
+          if (index < fullText.length) {
+            bubble.textContent += fullText.charAt(index);
+            index++;
+            container.scrollTop = container.scrollHeight;
+          } else {
+            clearInterval(interval);
+            bubble.classList.remove("blinking-cursor");
+            resolve();
+          }
+        }, speed);
+      });
     }
 
     async function generateInterviewQuestion() {
+      if (!introComplete) return;
       document.getElementById("next-question").classList.add("hidden");
-      document.getElementById("user-answer").value = "";
-
-      appendMessage(`Hi there 👋 Before we begin, can you confirm the role and company you're applying for?`, "bot");
-      appendMessage(`Role: ${role || "N/A"}\nCompany: ${company || "N/A"}`, "info");
-      appendMessage("Loading your first question... 🎯", "bot");
 
       const res = await fetch("http://localhost:5000/api/question", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, company })
+        body: JSON.stringify({ role: storedRole, company: storedCompany })
       });
 
       const data = await res.json();
-      appendMessage(data.question, "bot");
+      await appendTypingMessage(data.question);
+      saveChat(data.question, "bot");
     }
 
     async function evaluateUserAnswer(mode = "typed") {
-      const userAnswer = document.getElementById("user-answer").value;
-      if (!userAnswer.trim()) return alert("Please provide an answer first.");
+      const inputEl = document.getElementById("user-answer");
+      const userAnswer = inputEl.value;
+      inputEl.value = ""; // Clear text box immediately
 
+      if (!userAnswer.trim()) return alert("Please provide an answer first.");
       appendMessage(userAnswer, "user");
+      saveChat(userAnswer, "user");
+      if (!introComplete) {
+        try {
+          const res = await fetch("http://localhost:5000/api/extract-role-company", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ intro: userAnswer })
+          });
+
+          const data = await res.json();
+          storedRole = data.role || "Intern";
+          storedCompany = data.company || "N/A";
+          introComplete = true;
+
+          await appendTypingMessage(`Thanks! Preparing your interview session for a ${storedRole} at ${storedCompany}...`);
+          await generateInterviewQuestion();
+        } catch (err) {
+          console.error("Role/Company extraction failed", err);
+          await appendTypingMessage("Hmm, I couldn't detect the role and company. Could you rephrase it?");
+        }
+        return;
+      }
 
       const res = await fetch("http://localhost:5000/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer: userAnswer, company })
+        body: JSON.stringify({ answer: userAnswer, role: storedRole, company: storedCompany })
       });
 
       const data = await res.json();
-      appendMessage(data.feedback, "bot");
+      await appendTypingMessage(data.feedback);
+      saveChat(data.feedback, "bot");
       document.getElementById("next-question").classList.remove("hidden");
-
-      let allChats = JSON.parse(localStorage.getItem("chatSessions")) || [];
-      const timestamp = new Date().toLocaleString();
-      if (!allChats.some(c => c.role === role)) {
-        allChats.push({ role, timestamp });
-        localStorage.setItem("chatSessions", JSON.stringify(allChats));
-        renderChatHistory();
-      }
     }
 
     let mediaRecorder;
@@ -192,6 +254,14 @@
     document.getElementById("submit-answer").addEventListener("click", () => evaluateUserAnswer("typed"));
     document.getElementById("next-question").addEventListener("click", generateInterviewQuestion);
 
+    // ✅ New: Send with Enter (Shift+Enter for newline)
+    document.getElementById("user-answer").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        evaluateUserAnswer("typed");
+      }
+    });
+
     function renderChatHistory() {
       const historyBox = document.getElementById("chat-history");
       const allChats = JSON.parse(localStorage.getItem("chatSessions")) || [];
@@ -206,10 +276,13 @@
       ).join("");
     }
 
-    window.onload = () => {
-      generateInterviewQuestion();
+    window.onload = async () => {
+      document.getElementById("chat-messages").innerHTML = "";
+      await appendTypingMessage("Hi there 👋 Before we begin, can you confirm the role and company you're applying for?");
       renderChatHistory();
     };
+    
   </script>
 </body>
 </html>
+
