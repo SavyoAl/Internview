@@ -31,9 +31,17 @@ const HEADERS = {
 };
 
 // Route: Generate Interview Question
+  // Route: Generate Interview Question
 app.post("/api/question", async (req, res) => {
   const { role, company } = req.body;
+
   if (!role) return res.status(400).json({ error: "Role is required" });
+
+  if (!company) {
+    return res.json({
+      question: `Thanks for sharing you're applying for the ${role} role. Could you also tell me which company you're applying to?`
+    });
+  }
 
   try {
     const { data, error } = await supabase
@@ -50,7 +58,7 @@ app.post("/api/question", async (req, res) => {
       return res.json({ question: data[0].question });
     }
 
-    const prompt = `You are a professional interviewer for the role of ${role}${company ? " at " + company : ""}. Ask one open-ended behavioral interview question. Avoid yes/no questions.`;
+    const prompt = `You are a professional interviewer for the role of ${role} at ${company}. Ask one open-ended behavioral interview question. Avoid yes/no questions.`;
 
     const response = await axios.post(
       OPENAI_API_URL,
@@ -177,11 +185,21 @@ app.post("/api/extract-role-company", async (req, res) => {
   if (!intro) return res.status(400).json({ error: "Missing input" });
 
   const prompt = `
-Extract the job role and company from this sentence:
-"${intro}"
-Respond in JSON:
-{ "role": "Your Role", "company": "Company Name" }
-`;
+  Extract the job role and company from this sentence:
+  "${intro}"
+
+  Rules:
+  - If only one job-related phrase is mentioned (e.g., "people consulting", "product manager"), treat it as the role and set company to null.
+  - If only a known company name or abbreviation is mentioned (e.g., "EY", "PwC", "KPMG", "Deloitte", "Google"), treat it as the company and set role to null.
+  - Accept standalone company names without "at", "for", or "with".
+  - Do not guess missing values. If either role or company is not clearly mentioned, return null.
+
+  Respond strictly in this JSON format:
+  {
+    "role": "Full job title here or null",
+    "company": "Company name here or null"
+  }
+  `;
 
   try {
     const response = await axios.post(
@@ -210,9 +228,25 @@ Respond in JSON:
 
 // Route: Save Chat
 app.post("/api/save-chat", async (req, res) => {
-  const { session_id, role, company, message, sender } = req.body;
+  const { session_id, role, company, message, sender, messages } = req.body;
 
   try {
+    if (messages) {
+      // 🌟 Save entire conversation as one row
+      const { error } = await supabase.from("chat_sessions").upsert([{
+        session_id,
+        role,
+        company,
+        full_conversation: messages,
+        timestamp: new Date().toISOString()
+      }]);
+
+      if (error) throw error;
+      console.log("💾 Full chat saved to chat_sessions");
+      return res.json({ success: true });
+    }
+
+    // Fallback for old per-message logging (if you still want it)
     const { error } = await supabase.from("chat_logs").insert([{
       session_id,
       role,
@@ -223,7 +257,7 @@ app.post("/api/save-chat", async (req, res) => {
     }]);
 
     if (error) throw error;
-    console.log("💾 Chat saved:", { session_id, message });
+    console.log("💾 Message saved to chat_logs:", { session_id, message });
     res.json({ success: true });
 
   } catch (err) {
@@ -232,25 +266,42 @@ app.post("/api/save-chat", async (req, res) => {
   }
 });
 
-// Route: Load Chat
-app.post("/api/load-chat", async (req, res) => {
-  const { session_id } = req.body;
 
+// Route: Load Chat
+  app.post("/api/load-chat", async (req, res) => {
+    const { session_id } = req.body;
+
+    try {
+      const { data, error } = await supabase
+        .from("chat_sessions")
+        .select("*")
+        .eq("session_id", session_id)
+        .single();
+
+      if (error) throw error;
+      res.json({ data });
+    } catch (err) {
+      console.error("❌ /api/load-chat:", err.message);
+      res.status(500).json({ error: "Failed to load chat" });
+    }
+  });
+
+  // Route: Load all session summaries for sidebar
+app.get("/api/load-sessions", async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from("chat_logs")
-      .select("*")
-      .eq("session_id", session_id)
-      .order("timestamp", { ascending: true });
+      .from("chat_sessions")
+      .select("session_id, role, company, timestamp")
+      .order("timestamp", { ascending: false });
 
     if (error) throw error;
-    res.json({ data });
-
+    res.json({ sessions: data });
   } catch (err) {
-    console.error("❌ /api/load-chat:", err.message);
-    res.status(500).json({ error: "Failed to load chat" });
+    console.error("❌ /api/load-sessions:", err.message);
+    res.status(500).json({ error: "Failed to load sessions" });
   }
 });
+
 
 // Start Server
 const PORT = process.env.PORT || 5000;

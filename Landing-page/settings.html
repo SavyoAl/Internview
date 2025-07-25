@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings - Internview</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800">
+  <div class="max-w-xl mx-auto mt-12 p-6 bg-white rounded-lg shadow-md">
+    <h1 class="text-2xl font-semibold mb-4">Profile Settings</h1>
+    <form id="settingsForm" onsubmit="return updateProfile(event)">
+      <div class="mb-4">
+        <label for="fullName" class="block text-sm font-medium text-gray-700">Full Name</label>
+        <input type="text" id="fullName" class="mt-1 block w-full border rounded-md px-3 py-2" required>
+      </div>
+
+      <div class="mb-4">
+        <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+        <input type="email" id="email" class="mt-1 block w-full border rounded-md px-3 py-2" required>
+      </div>
+
+      <div class="mb-6">
+        <label for="cvFile" class="block text-sm font-medium text-gray-700">Upload CV</label>
+        <input type="file" id="cvFile" accept=".pdf,.doc,.docx" class="mt-1 block w-full text-sm text-gray-600">
+      </div>
+
+      <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition">
+        Save Changes
+      </button>
+    </form>
+    <p id="statusMsg" class="mt-4 text-sm text-green-600 hidden">✅ Profile updated successfully!</p>
+  </div>
+
+  <script>
+    const client = supabase.createClient(
+      "https://ifegplviaqbpkkebjuyr.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZWdwbHZpYXFicGtrZWJqdXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3OTU0OTYsImV4cCI6MjA2ODM3MTQ5Nn0.qHZJ03iSIAriLzVNTuMCzXzN3IngKLEzovuUO-9fSfo"
+    );
+
+    // Prefill form with current user data
+    document.addEventListener("DOMContentLoaded", async () => {
+      const { data: { user }, error } = await client.auth.getUser();
+      if (error || !user) return alert("Not logged in.");
+
+      document.getElementById("fullName").value = user.user_metadata?.full_name || "";
+      document.getElementById("email").value = user.email || "";
+    });
+
+    async function updateProfile(e) {
+      e.preventDefault();
+      const fullName = document.getElementById("fullName").value;
+      const email = document.getElementById("email").value;
+      const file = document.getElementById("cvFile").files[0];
+
+      const { data: { user }, error } = await client.auth.getUser();
+      if (error || !user) return alert("User not found.");
+
+      // Update user info
+      const { error: updateError } = await client.auth.updateUser({
+        email,
+        data: { full_name: fullName }
+      });
+      if (updateError) return alert("Error updating user: " + updateError.message);
+
+      // Upload CV if selected
+if (file) {
+  const path = `cv/${user.id}/${file.name}`;
+
+  let { error } = await client.storage.from("user-cvs").upload(path, file);
+
+  if (error && error.message.includes("already exists")) {
+    ({ error } = await client.storage.from("user-cvs").update(path, file));
+  }
+
+  if (error) {
+    return alert("CV upload failed: " + error.message);
+  }
+
+  // ✅ STEP 4: Trigger backend CV text extraction
+  try {
+    const response = await fetch("http://localhost:5000/api/extract-cv-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.id,
+        file_name: file.name
+      })
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      console.warn("⚠️ CV text extraction failed:", result.error || result);
+    } else {
+      console.log("✅ CV text extracted and saved.");
+    }
+  } catch (err) {
+    console.error("❌ Error calling /api/extract-cv-text:", err.message);
+  }
+}
+
+      document.getElementById("statusMsg").classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>

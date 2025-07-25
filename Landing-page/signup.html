@@ -15,7 +15,9 @@
     <h2>Create Account</h2>
     <p class="auth-subtext">Already have an account? <a href="signin.html">Log in</a></p>
     <form onsubmit="return handleSignup(event)">
+      <input type="text" id="signupFullName" placeholder="Full Name" required />
       <input type="email" id="signupEmail" placeholder="Email" required />
+
 
       <div class="password-wrapper">
         <input type="password" id="signupPassword" placeholder="Password (min. 8 characters)" required oninput="validatePassword()" />
@@ -36,19 +38,28 @@
     );
 
     async function handleSignup(e) {
-      e.preventDefault();
-      const email = document.getElementById("signupEmail").value;
-      const password = document.getElementById("signupPassword").value;
+    e.preventDefault();
+    const fullName = document.getElementById("signupFullName").value;
+    const email = document.getElementById("signupEmail").value;
+    const password = document.getElementById("signupPassword").value;
 
-      const { data, error } = await client.auth.signUp({ email, password });
-
-      if (error) {
-        alert(error.message);
-      } else {
-        alert("Account created! Check your email to confirm.");
-        window.location.href = "home.html";
+    const { data, error } = await client.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName
+        }
       }
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      alert("Account created! Check your email to confirm.");
+      window.location.href = "home.html";
     }
+  }
 
     function toggleSignupPassword(icon) {
       const input = document.getElementById("signupPassword");

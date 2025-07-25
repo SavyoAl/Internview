@@ -6,18 +6,54 @@
   <title>Interview Session</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  
   <style>
+    /* Existing blinking cursor */
     @keyframes blink {
       0%, 100% { opacity: 0; }
       50% { opacity: 1; }
     }
+
     .blinking-cursor::after {
       content: '|';
       animation: blink 1s step-end infinite;
       margin-left: 2px;
       color: #555;
     }
+
+    /* ✅ New: Dot loader animation */
+    @keyframes dotBlink {
+      0% { opacity: 0.2; transform: scale(1); }
+      20% { opacity: 1; transform: scale(1.3); }
+      100% { opacity: 0.2; transform: scale(1); }
+    }
+
+    .dot-typing {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-start;
+      height: 24px;
+      margin-top: 4px;
+    }
+
+    .dot-typing span {
+      width: 8px;
+      height: 8px;
+      background-color: #555;
+      border-radius: 50%;
+      animation: dotBlink 1.4s infinite both;
+    }
+
+    .dot-typing span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .dot-typing span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
   </style>
+
   <script>
     tailwind.config = {
       theme: {
@@ -30,6 +66,7 @@
     }
   </script>
 </head>
+
 <body class="bg-white flex min-h-screen font-sans">
 
   <!-- Sidebar -->
@@ -74,9 +111,23 @@
     let storedCompany = "";
     let introComplete = false;
 
+    
+    let chatLog = []; // New: stores full chat log
+    let inactivityTimer = null;
+    const INACTIVITY_LIMIT = 1 * 60 * 1000; // 1 minute for testing
+
+    let questionCount = 1;
+
     // ✅ Generate session ID and store it in localStorage
     const sessionId = localStorage.getItem("chatSessionId") || crypto.randomUUID();
     localStorage.setItem("chatSessionId", sessionId);
+    // 🔐 Supabase auth setup
+    let userId = null;
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    })();
 
     // ✅ Save messages to Supabase
     function saveChat(message, sender = "user") {
@@ -92,40 +143,82 @@
         })
       }).catch(err => console.error("Save failed", err));
     }
+    
+
     function appendMessage(text, type = "bot") {
       const chat = document.createElement("div");
-      chat.className = `max-w-[75%] px-4 py-2 rounded-lg shadow text-sm whitespace-pre-wrap ${
+      chat.className = `max-w-[75%] px-4 py-2 rounded-lg text-sm whitespace-pre-wrap ${
         type === "user"
           ? "self-end bg-pink-100 text-right text-black ml-auto"
           : type === "info"
           ? "bg-pink-500 text-white font-medium text-left"
-          : "bg-gray-100 text-gray-800 text-left"
+          : "text-black text-left bg-transparent shadow-none"
       }`;
+
       chat.innerText = text;
       document.getElementById("chat-messages").appendChild(chat);
       chat.scrollIntoView({ behavior: "smooth" });
+
+      // ✅ Store message in chat log
+      chatLog.push({ message: text, sender: type });
+
+      // ✅ Reset inactivity timer
+      resetInactivityTimer();
     }
 
     function appendTypingMessage(fullText, speed = 20) {
       return new Promise(resolve => {
         const container = document.getElementById("chat-messages");
         const bubble = document.createElement("div");
-        bubble.className = "max-w-[75%] px-4 py-2 rounded-lg shadow text-sm whitespace-pre-wrap bg-gray-100 text-gray-800 text-left blinking-cursor";
+        bubble.className = "max-w-[75%] px-4 py-2 rounded-lg text-sm whitespace-pre-wrap text-black text-left bg-transparent shadow-none blinking-cursor";
         container.appendChild(bubble);
 
         let index = 0;
         const interval = setInterval(() => {
           if (index < fullText.length) {
-            bubble.textContent += fullText.charAt(index);
+            bubble.innerHTML = fullText.slice(0, index + 1).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
             index++;
             container.scrollTop = container.scrollHeight;
           } else {
             clearInterval(interval);
             bubble.classList.remove("blinking-cursor");
+
+            // ✅ FIX: Save the full bot message to chatLog
+            chatLog.push({ message: fullText, sender: "bot" });
+
             resolve();
           }
         }, speed);
       });
+    }
+
+    function resetInactivityTimer() {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        autoSaveChat();
+      }, INACTIVITY_LIMIT);
+    }
+
+    async function autoSaveChat() {
+      console.log("💤 User inactive. Saving full chat to Supabase...");
+
+      const res = await fetch("http://localhost:5000/api/save-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          role: storedRole,
+          company: storedCompany,
+          messages: chatLog
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        console.log("✅ Auto-saved chat after inactivity.");
+      } else {
+        console.error("❌ Auto-save failed.");
+      }
     }
 
     async function generateInterviewQuestion() {
@@ -139,8 +232,11 @@
       });
 
       const data = await res.json();
-      await appendTypingMessage(data.question);
-      saveChat(data.question, "bot");
+      const questionText = `**Question ${questionCount}:** ${data.question}`;
+      await appendTypingMessage(questionText);
+      saveChat(`Question ${questionCount}: ${data.question}`, "bot");
+      questionCount++;
+
     }
 
     async function evaluateUserAnswer(mode = "typed") {
@@ -160,12 +256,31 @@
           });
 
           const data = await res.json();
-          storedRole = data.role || "Intern";
-          storedCompany = data.company || "N/A";
-          introComplete = true;
 
-          await appendTypingMessage(`Thanks! Preparing your interview session for a ${storedRole} at ${storedCompany}...`);
-          await generateInterviewQuestion();
+          // ✅ Only update if data.role is provided
+          if (data.role) storedRole = data.role;
+
+          // ✅ Only update if data.company is provided
+          if (data.company) storedCompany = data.company;
+
+          if (!storedRole || !storedCompany) {
+        if (!storedRole && !storedCompany) {
+          await appendTypingMessage("Could you please confirm both the role and company you're applying for?");
+        } else if (!storedRole) {
+          await appendTypingMessage(`Thanks for sharing you're applying to ${storedCompany}. Could you also tell me what role you're applying for?`);
+        } else {
+          await appendTypingMessage(`Thanks for sharing you're applying for the ${storedRole} role. Could you also tell me which company you're applying to?`);
+        }
+        return;
+      }
+
+      // ✅ We now have both role and company!
+      introComplete = true;
+      await appendTypingMessage(`Thanks! Preparing your interview session for a ${storedRole} at ${storedCompany}...`);
+      await autoSaveChat();       // 💾 Save immediately
+      await renderChatHistory();  // 🔄 Refresh the sidebar
+      await generateInterviewQuestion();
+
         } catch (err) {
           console.error("Role/Company extraction failed", err);
           await appendTypingMessage("Hmm, I couldn't detect the role and company. Could you rephrase it?");
@@ -173,16 +288,37 @@
         return;
       }
 
-      const res = await fetch("http://localhost:5000/api/evaluate", {
+            // 👉 Show "Thinking..." bubble
+        const thinkingBubble = document.createElement("div");
+        thinkingBubble.className = "max-w-[75%] px-4 py-2 rounded-lg shadow bg-gray-100 text-left";
+        thinkingBubble.id = "thinking-indicator";
+
+        const dots = document.createElement("div");
+        dots.className = "dot-typing";
+        dots.innerHTML = "<span></span><span></span><span></span>";
+
+        thinkingBubble.appendChild(dots);
+        document.getElementById("chat-messages").appendChild(thinkingBubble);
+
+      // 🧠 Evaluate with backend
+        const res = await fetch("http://localhost:5000/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer: userAnswer, role: storedRole, company: storedCompany })
       });
 
       const data = await res.json();
+
+      // ✅ Remove thinking bubble
+      thinkingBubble.remove();
+
       await appendTypingMessage(data.feedback);
-      saveChat(data.feedback, "bot");
-      document.getElementById("next-question").classList.remove("hidden");
+      await autoSaveChat();
+
+      // 👇 Automatically generate next question after 4 seconds
+      setTimeout(() => {
+        generateInterviewQuestion();
+      }, 4000);
     }
 
     let mediaRecorder;
@@ -276,11 +412,57 @@
       ).join("");
     }
 
+    async function loadSessionById(sessionId) {
+    const res = await fetch("http://localhost:5000/api/load-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId })
+    });
+
+    const { data } = await res.json();
+    if (!data || !data.full_conversation) return;
+
+    document.getElementById("chat-messages").innerHTML = "";
+    storedRole = data.role;
+    storedCompany = data.company;
+    introComplete = true;
+
+    data.full_conversation.forEach(msg => {
+    appendMessage(msg.message, msg.sender || "bot");
+    });
+  }
+
     window.onload = async () => {
       document.getElementById("chat-messages").innerHTML = "";
       await appendTypingMessage("Hi there 👋 Before we begin, can you confirm the role and company you're applying for?");
       renderChatHistory();
     };
+    async function renderChatHistory() {
+      const res = await fetch("http://localhost:5000/api/load-sessions", {
+        method: "GET"
+      });
+      const { sessions } = await res.json();
+      
+      const historyBox = document.getElementById("chat-history");
+      if (!sessions.length) {
+        historyBox.innerHTML = "<p class='text-gray-400'>No chats yet</p>";
+        return;
+      }
+
+      historyBox.innerHTML = sessions.map(chat => `
+        <div class="p-2 border rounded hover:bg-gray-100 cursor-pointer" data-session-id="${chat.session_id}">
+          ${chat.role || "Unknown Role"}<br>
+          <span class="text-xs text-gray-400">${new Date(chat.timestamp).toLocaleString()}</span>
+        </div>
+      `).join("");
+
+      // Enable click to load past session
+      document.querySelectorAll("[data-session-id]").forEach(el => {
+        el.addEventListener("click", () => {
+          loadSessionById(el.dataset.sessionId);
+        });
+      });
+    }
     
   </script>
 </body>
