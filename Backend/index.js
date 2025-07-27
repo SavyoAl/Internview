@@ -7,10 +7,14 @@ const cors = require("cors");
 const multer = require("multer");
 const FormData = require("form-data");
 const { createClient } = require("@supabase/supabase-js");
+const fs = require("fs");
+const path = require("path");
+const googleTTS = require("google-tts-api");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/audio', express.static(path.join(__dirname, '../public/audio')));
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Supabase client
@@ -299,6 +303,30 @@ app.get("/api/load-sessions", async (req, res) => {
   } catch (err) {
     console.error("❌ /api/load-sessions:", err.message);
     res.status(500).json({ error: "Failed to load sessions" });
+  }
+});
+
+// Route: Text to Speech
+app.post("/api/tts", async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: "Text is required" });
+
+  try {
+    const url = googleTTS.getAudioUrl(text, {
+      lang: "en",
+      slow: false,
+      host: "https://translate.google.com",
+    });
+
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+    const buffer = Buffer.from(response.data, "binary");
+    const fileName = `reply-${Date.now()}.mp3`;
+    const filePath = path.join(__dirname, "../public/audio", fileName);
+    fs.writeFileSync(filePath, buffer);
+    res.json({ url: `/audio/${fileName}` });
+  } catch (err) {
+    console.error("❌ /api/tts:", err.message);
+    res.status(500).json({ error: "TTS failed" });
   }
 });
 
