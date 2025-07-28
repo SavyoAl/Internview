@@ -3,6 +3,8 @@ console.log("✅ Backend starting...");
 const express = require("express");
 const axios = require("axios");
 require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const cors = require("cors");
 const multer = require("multer");
 const FormData = require("form-data");
