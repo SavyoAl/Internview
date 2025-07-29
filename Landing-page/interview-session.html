@@ -100,6 +100,7 @@
         <button id="stop-button" class="bg-red-500 text-white px-3 py-1 text-sm rounded hidden">⏹️ Stop</button>
         <button id="submit-answer" class="bg-pink-500 text-white px-4 py-1 text-sm rounded hover:bg-pink-600">➤</button>
       </div>
+      <label class="mt-2 text-xs self-start"><input type="checkbox" id="audio-toggle" class="mr-1">Send AI replies as audio</label>
     </div>
 
     <div id="timer" class="text-xs text-gray-400 mt-2 hidden">Recording: <span id="time">0</span>s</div>
@@ -192,6 +193,21 @@
       });
     }
 
+    function appendAudio(url, type = "bot") {
+      const container = document.getElementById("chat-messages");
+      const wrapper = document.createElement("div");
+      wrapper.className = `max-w-[75%] px-4 py-2 rounded-lg text-sm whitespace-pre-wrap ${
+        type === "user"
+          ? "self-end bg-pink-100 text-right text-black ml-auto"
+          : "text-black text-left bg-transparent shadow-none"}`;
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.src = url;
+      wrapper.appendChild(audio);
+      container.appendChild(wrapper);
+      wrapper.scrollIntoView({ behavior: "smooth" });
+    }
+
     function resetInactivityTimer() {
       if (inactivityTimer) clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
@@ -234,6 +250,19 @@
       const data = await res.json();
       const questionText = `**Question ${questionCount}:** ${data.question}`;
       await appendTypingMessage(questionText);
+      if (document.getElementById("audio-toggle").checked) {
+        try {
+          const audioRes = await fetch("http://localhost:5000/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: questionText })
+          });
+          const { url } = await audioRes.json();
+          if (url) appendAudio(url);
+        } catch (err) {
+          console.error("Audio generation failed", err);
+        }
+      }
       saveChat(`Question ${questionCount}: ${data.question}`, "bot");
       questionCount++;
 
@@ -313,6 +342,19 @@
       thinkingBubble.remove();
 
       await appendTypingMessage(data.feedback);
+      if (document.getElementById("audio-toggle").checked) {
+        try {
+          const audioRes = await fetch("http://localhost:5000/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: data.feedback })
+          });
+          const { url } = await audioRes.json();
+          if (url) appendAudio(url);
+        } catch (err) {
+          console.error("Audio generation failed", err);
+        }
+      }
       await autoSaveChat();
 
       // 👇 Automatically generate next question after 4 seconds
