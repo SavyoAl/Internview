@@ -98,7 +98,8 @@
       <div class="flex gap-2 self-end">
         <button id="record-button" class="bg-gray-200 text-gray-700 px-3 py-1 text-sm rounded hover:bg-gray-300">🎤 Speak</button>
         <button id="stop-button" class="bg-red-500 text-white px-3 py-1 text-sm rounded hidden">⏹️ Stop</button>
-        <button id="submit-answer" class="bg-pink-500 text-white px-4 py-1 text-sm rounded hover:bg-pink-600">➤</button>
+        <button id="submit-answer" type="button" class="bg-pink-500 text-white px-4 py-1 text-sm rounded hover:bg-pink-600">➤</button>
+
       </div>
     </div>
 
@@ -165,6 +166,30 @@
       // ✅ Reset inactivity timer
       resetInactivityTimer();
     }
+
+    function addAudioMessage(audioUrl, sender = "user") {
+      const chat = document.createElement("div");
+      chat.className = `max-w-[75%] px-4 py-2 rounded-lg text-sm ${
+        sender === "user"
+          ? "self-end bg-pink-100 text-right text-black ml-auto"
+          : "text-black text-left bg-gray-100 shadow"
+      }`;
+
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.src = audioUrl;
+      audio.className = "w-full";
+      audio.setAttribute("preload", "none");
+      audio.setAttribute("controlsList", "nodownload");
+      chat.appendChild(audio);
+      document.getElementById("chat-messages").appendChild(chat);
+      chat.scrollIntoView({ behavior: "smooth" });
+
+      chatLog.push({ message: `[Audio: ${audioUrl}]`, sender });
+      saveChat(`[Audio: ${audioUrl}]`, sender);
+      resetInactivityTimer();
+    }
+
 
     function appendTypingMessage(fullText, speed = 20) {
       return new Promise(resolve => {
@@ -239,9 +264,9 @@
 
     }
 
-    async function evaluateUserAnswer(mode = "typed") {
+    async function evaluateUserAnswer(mode = "typed", overrideText = null) {
       const inputEl = document.getElementById("user-answer");
-      const userAnswer = inputEl.value;
+      const userAnswer = overrideText || inputEl.value;
       inputEl.value = ""; // Clear text box immediately
 
       if (!userAnswer.trim()) return alert("Please provide an answer first.");
@@ -314,6 +339,30 @@
 
       await appendTypingMessage(data.feedback);
       await autoSaveChat();
+      // 🧠 Convert AI feedback to audio using ElevenLabs
+      let ttsData = null;
+      try {
+        const ttsRes = await fetch("http://localhost:5000/api/text-to-speech", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: data.feedback })
+        });
+
+        ttsData = await ttsRes.json();
+        console.log("🔊 TTS Response:", ttsData);
+
+        if (ttsRes.ok && ttsData.audioUrl) {
+          addAudioMessage(`http://localhost:5000${ttsData.audioUrl}`, "bot");
+        } else {
+          console.warn("⚠️ Invalid TTS response", ttsData);
+        }
+
+      } catch (err) {
+        console.error("❌ TTS error:", err);
+      }
+
+
+
 
       // 👇 Automatically generate next question after 4 seconds
       setTimeout(() => {
@@ -353,6 +402,7 @@
 
       mediaRecorder.onstop = async () => {
         stopTimer();
+
         const blob = new Blob(audioChunks, { type: "audio/webm" });
         const formData = new FormData();
         formData.append("audio", blob);
@@ -363,17 +413,27 @@
             body: formData
           });
 
+          if (!res.ok) throw new Error("Transcription failed");
+
           const data = await res.json();
-          document.getElementById("user-answer").value = data.transcript;
-          evaluateUserAnswer("voice");
+
+          if (data.audioUrl) {
+            addAudioMessage(`http://localhost:5000${data.audioUrl}`, "user");
+          } else {
+            throw new Error("Missing audio URL in response");
+          }
+
+          evaluateUserAnswer("voice", data.transcript);
+
         } catch (err) {
-          alert("Error transcribing voice. Please try again.");
-          console.error(err);
+          console.error("🎤 Voice transcription error:", err);
+          alert("Something went wrong during transcription. Please try again.");
         }
 
         document.getElementById("record-button").classList.remove("hidden");
         document.getElementById("stop-button").classList.add("hidden");
       };
+
 
       mediaRecorder.start();
       startTimer();
@@ -397,20 +457,6 @@
         evaluateUserAnswer("typed");
       }
     });
-
-    function renderChatHistory() {
-      const historyBox = document.getElementById("chat-history");
-      const allChats = JSON.parse(localStorage.getItem("chatSessions")) || [];
-      if (!allChats.length) {
-        historyBox.innerHTML = "<p class='text-gray-400'>No chats yet</p>";
-        return;
-      }
-      historyBox.innerHTML = allChats.map(chat =>
-        `<div class="p-2 border rounded hover:bg-gray-100 cursor-pointer">
-          ${chat.role}<br><span class="text-xs text-gray-400">${chat.timestamp}</span>
-        </div>`
-      ).join("");
-    }
 
     async function loadSessionById(sessionId) {
     const res = await fetch("http://localhost:5000/api/load-chat", {
@@ -463,7 +509,18 @@
         });
       });
     }
-    
+      window.addEventListener("beforeunload", (e) => {
+        e.preventDefault();
+        e.returnValue = "";
+      });
+
+      window.addEventListener("error", function (event) {
+      console.error("🔥 Global Error:", event.message, "at", event.filename, ":", event.lineno);
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+      console.error("🔥 Unhandled Promise Rejection:", event.reason);
+      });
   </script>
 </body>
 </html>

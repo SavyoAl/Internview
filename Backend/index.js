@@ -9,11 +9,12 @@ const cors = require("cors");
 const multer = require("multer");
 const FormData = require("form-data");
 const { createClient } = require("@supabase/supabase-js");
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-const upload = multer({ storage: multer.memoryStorage() });
+app.use("/audio", express.static(path.join(__dirname, "public/audio")));
 
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -154,10 +155,21 @@ Feedback:
 });
 
 // Route: Audio Transcription
+const upload = multer({ storage: multer.memoryStorage() }); // (Make sure this exists)
+
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   try {
+    // Generate filename and save the uploaded audio
+    const fileName = `${uuidv4()}.webm`; // ✅ keep extension accurate
+const outputPath = path.join(__dirname, "public/audio", fileName);
+const writeStream = fs.createWriteStream(outputPath);
+audioBlob.pipe(writeStream);
+res.json({ transcript, audioUrl: `/audio/${fileName}` });
+
+
+    // Transcribe the audio with Whisper
     const formData = new FormData();
-    formData.append("file", req.file.buffer, "voice.webm");
+    formData.append("file", fs.createReadStream(filePath));
     formData.append("model", "whisper-1");
 
     const response = await axios.post(
@@ -173,13 +185,18 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 
     const transcript = response.data.text;
     console.log("🎧 Transcribed:", transcript);
-    res.json({ transcript });
+
+    res.json({
+      transcript,
+      audioUrl: `/audio/${fileName}` // 👈 Return the URL to frontend
+    });
 
   } catch (err) {
     console.error("❌ /api/transcribe:", err.message);
     res.status(500).json({ error: "Transcription failed" });
   }
 });
+
 
 // Route: Extract Role and Company
 app.post("/api/extract-role-company", async (req, res) => {
@@ -304,7 +321,51 @@ app.get("/api/load-sessions", async (req, res) => {
   }
 });
 
+// 🔊 Text-to-Speech Route (insert here)
+app.post("/api/text-to-speech", async (req, res) => {
+  const { text } = req.body;
+  const fileName = `${uuidv4()}.mp3`;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
 
+  try {
+    const response = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        text,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      },
+      {
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json"
+        },
+        responseType: "stream"
+      }
+    );
+
+    const outputPath = path.join(__dirname, "public/audio", fileName);
+    const writer = fs.createWriteStream(outputPath);
+    response.data.pipe(writer);
+
+    writer.on("finish", () => {
+      console.log("🔊 TTS complete:", fileName);
+      res.json({ audioUrl: `/audio/${fileName}` });
+    });
+
+    writer.on("error", (err) => {
+      console.error("❌ TTS error:", err.message);
+      res.status(500).json({ error: "TTS failed" });
+    });
+
+  } catch (err) {
+    console.error("❌ TTS request error:", err.message);
+    res.status(500).json({ error: "TTS failed" });
+  }
+});
 // Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
